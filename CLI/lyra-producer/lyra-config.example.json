@@ -1,0 +1,12 @@
+{
+  "apiKey": "AIza...your-google-gemini-api-key-here...",
+  "model": "lyria-3-pro-preview",
+  "endpointBase": "https://generativelanguage.googleapis.com/v1beta/models",
+  "outputFormat": "mp3",
+  "timeoutSeconds": 300,
+  "instrumentalByDefault": false,
+  "delayBetweenTracksSeconds": 2,
+  "maxRetries": 2,
+  "saveLyricsSidecar": true,
+  "slugMaxLength": 80
+}

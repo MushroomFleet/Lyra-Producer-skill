@@ -1,0 +1,12 @@
+{
+  "apiKey": "CHANGEME",
+  "model": "lyria-3-pro-preview",
+  "endpointBase": "https://generativelanguage.googleapis.com/v1beta/models",
+  "outputFormat": "mp3",
+  "timeoutSeconds": 300,
+  "instrumentalByDefault": false,
+  "delayBetweenTracksSeconds": 2,
+  "maxRetries": 2,
+  "saveLyricsSidecar": false,
+  "slugMaxLength": 80
+}
