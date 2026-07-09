@@ -3,7 +3,8 @@
 When a catalogue's shape can't be read reliably by the markdown parser, Claude reads
 and understands the file, extracts each track, and writes a **manifest JSON**. The
 CLI's `-Manifest` mode consumes it and does only the API inference + delivery — the
-zero-UI split: PowerShell infers, Claude extracts.
+zero-UI split: the CLI (native exe or PowerShell script — either implementation)
+infers, Claude extracts.
 
 ## Schema
 

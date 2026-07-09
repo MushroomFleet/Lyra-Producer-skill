@@ -1,9 +1,10 @@
 # Lyria prompt-catalogue format & CLI behaviour
 
-Reference for the markdown "prompt catalogue" files that `Invoke-LyraProducer.ps1`
-consumes, and exactly how the CLI turns them into audio. Read this when a file's
-structure looks unusual, when the dry-run track count is surprising, or when a
-catalogue contains lyrics / timed structure.
+Reference for the markdown "prompt catalogue" files that the LyraProducer CLI
+consumes (`LyraProducer.exe`, or `Invoke-LyraProducer.ps1` as a fallback — both
+behave identically here), and exactly how the CLI turns them into audio. Read this
+when a file's structure looks unusual, when the dry-run track count is surprising,
+or when a catalogue contains lyrics / timed structure.
 
 ## What a catalogue file looks like
 
