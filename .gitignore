@@ -1,2 +1,13 @@
 # Read-only reference material, not part of the repo
 /ref/
+
+# Private native-CLI source: synced to a separate private repository, never published here
+/CLI/LyraProducer.Cli/
+
+# Real API keys live in this file. Copy lyra-config.example.json and never commit the result.
+lyra-config.json
+
+# Built binaries (~67 MB self-contained exe) and generated audio stay out of git
+LyraProducer.exe
+*.mp3
+*.wav

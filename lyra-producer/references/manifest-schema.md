@@ -30,7 +30,11 @@ Fields:
   it the clean song title, not "Track 1 — ...". Slugging handles the rest.
 - **`prompt`** (per track, required) — the music/generation prompt text only. Do NOT
   fold lyrics or timestamps into it; the CLI concatenates prompt + lyrics + structure.
-- **`lyrics`** (per track, optional) — omit or leave empty for instrumental tracks.
+- **`lyrics`** (per track, optional) — the words to be sung, when a track has them.
+  ⚠️ **Omitting it does not make a track instrumental** — it only means no lyric text is
+  concatenated. Lyria's documented default is to add vocals and write its own lyrics
+  unless the prompt says otherwise, so an instrumental track's `prompt` should say
+  `Instrumental only, no vocals.` (or the run should pass `-Instrumental`).
 - **`structure`** (per track, optional) — the timed-structure text if the file has one.
 - **`sourceFile`** (required unless `outputDir` given) — the original `.md`. The CLI
   derives the output folder from it: the file's directory + the first-4-filename-words
