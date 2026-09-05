@@ -17,7 +17,8 @@ infers, Claude extracts.
       "title":     "Built To Be Remade",
       "prompt":    "A high-energy Super Eurobeat opening-theme at 158 BPM ...",
       "lyrics":    "[Intro]\nRemade (remade)\n...",
-      "structure": "[00:00 - 00:10] Intro - A major, 158 BPM ...\n..."
+      "structure": "[00:00 - 00:10] Intro - A major, 158 BPM ...\n...",
+      "images":    ["cover.jpg", "C:/abs/path/mood-board.png"]
     }
   ]
 }
@@ -36,6 +37,13 @@ Fields:
   unless the prompt says otherwise, so an instrumental track's `prompt` should say
   `Instrumental only, no vocals.` (or the run should pass `-Instrumental`).
 - **`structure`** (per track, optional) — the timed-structure text if the file has one.
+- **`images`** (per track, optional) — up to 10 image files for Lyria 3.5 to draw
+  mood and colour from. Paths are absolute or relative to the manifest file. Allowed
+  types: `.jpg .jpeg .png .webp .gif`. Every path is checked at read time — a missing
+  file, an unsupported type, or an 11th image is a hard error before any request is
+  made. Images need the Interactions route (`lyria-3.5` / `-Clip`); a run that routes to
+  the legacy `lyria-3-pro-*` endpoint refuses a manifest with images. The dry-run tags
+  such tracks `[+images]`.
 - **`sourceFile`** (required unless `outputDir` given) — the original `.md`. The CLI
   derives the output folder from it: the file's directory + the first-4-filename-words
   rule (e.g. `spirit-of-racing-eurobeat-ost.md` → `spirit-of-racing-eurobeat/`).
@@ -55,6 +63,8 @@ Read the whole file and find, per track:
   under a label like `**Paste-ready prompt:**`, or simply the prose/fenced block).
 - the **lyrics** — the block of verse/chorus text, if any.
 - the **structure** — the timestamped block, if any.
+- the **images** — only when the file explicitly points at image files for a track
+  (a path or a markdown image link under the track). Never invent images.
 
 Order varies (structure may precede lyrics or vice-versa) but the *grammatical shape*
 makes each unmistakable: a prompt is descriptive prose, lyrics are sung lines, a timed

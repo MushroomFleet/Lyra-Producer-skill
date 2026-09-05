@@ -1,6 +1,6 @@
 ---
 name: lyra-producer
-description: This skill should be used when the user wants to generate music audio (.mp3) from a Lyria "prompt catalogue" markdown file — e.g. "generate the Wagner tracks", "produce the mp3s from chopin-nocturnes-that-never-were-lyria-prompts.md", "run Lyria on the composers folder", "make the audio for this prompt file" — or from ANY markdown file or folder holding labelled music-track prompts ("turn these track prompts into actual music files", "batch this folder of catalogues into mp3s overnight"). Also use it to regenerate or re-run specific tracks ("regenerate 04-storm-choral.mp3", "track 3 got safety-filtered, run it again") and for catalogue files the rigid parser can't read (## Track headers, prose prompts), where Claude extracts a manifest JSON before generating. Mentions of "Lyra Producer", Gemini Lyria music generation, or any *-lyria-prompts.md file always trigger it. It detects each track's prompt (plus optional lyrics and timed structure), previews the extraction with a dry-run, and orchestrates the LyraProducer CLI (native LyraProducer.exe, or the Invoke-LyraProducer.ps1 PowerShell fallback) to deliver full-song audio straight to disk.
+description: This skill should be used when the user wants to generate music audio (.mp3) from a Lyria "prompt catalogue" markdown file — e.g. "generate the Wagner tracks", "produce the mp3s from chopin-nocturnes-that-never-were-lyria-prompts.md", "run Lyria on the composers folder", "make the audio for this prompt file" — or from ANY markdown file or folder holding labelled music-track prompts ("turn these track prompts into actual music files", "batch this folder of catalogues into mp3s overnight"). Also use it to preview prompts cheaply as 30-second clips before committing to full songs ("clip-preview these tracks first", "give me 30-second previews"), to regenerate or re-run specific tracks ("regenerate 04-storm-choral.mp3", "track 3 got safety-filtered, run it again"), and for catalogue files the rigid parser can't read (## Track headers, prose prompts), where Claude extracts a manifest JSON before generating. Mentions of "Lyra Producer", Gemini Lyria, Lyria 3.5, lyria-3-clip-preview, or any *-lyria-prompts.md file always trigger it. It detects each track's prompt (plus optional lyrics, timed structure and reference images), previews the extraction with a dry-run, and orchestrates the LyraProducer CLI (native LyraProducer.exe, or the Invoke-LyraProducer.ps1 PowerShell fallback) to deliver full-song audio straight to disk.
 ---
 
 # Lyra Producer
@@ -8,7 +8,8 @@ description: This skill should be used when the user wants to generate music aud
 Turn a Lyria "prompt catalogue" markdown file into full-song `.mp3` audio on disk.
 This skill is the orchestration layer over the LyraProducer CLI — a zero-UI tool
 that parses a catalogue, extracts each track's prompt (plus any lyrics / timed
-structure it finds), calls the Gemini Lyria model, and writes numbered audio files
+structure it finds), calls Google's Lyria 3.5 models through the Gemini Interactions
+API, and writes numbered audio files
 into a per-file output subfolder next to the markdown. The CLI ships as two
 functionally-identical, flag-compatible implementations: a native `LyraProducer.exe`
 (preferred — no PowerShell or .NET runtime required to run it) and the original
@@ -16,9 +17,11 @@ functionally-identical, flag-compatible implementations: a native `LyraProducer.
 present). Both were built from, and proven against, the same specification, so this
 skill's instructions apply identically to either.
 
-Generation calls a paid API and each full song takes ~30-120s, so the guiding
-principle is **preview before you spend**: always dry-run and confirm scope before
-generating.
+Generation calls a paid API. A full Lyria 3.5 song is a couple of minutes of audio and
+can take several minutes to render (the CLI waits up to `timeoutSeconds`, default 600,
+per track), while a Clip preview is a 30-second piece that returns much faster. The
+guiding principle is **preview before you spend**: always dry-run and confirm scope
+before generating, and audition uncertain prompts with `-Clip` before a full run.
 
 ## Prerequisites
 
@@ -26,7 +29,9 @@ generating.
   no PowerShell or .NET runtime required). Only the `.ps1` fallback needs Windows
   PowerShell 5.1+ (`powershell.exe`) to run. Prefer a project-local copy of either;
   a bundled copy of both ships with this skill.
-- A Google Gemini/Lyria API key with access to the Lyria model.
+- A Google Gemini API key with access to the Lyria 3.5 models (`lyria-3.5` and
+  `lyria-3-clip-preview`). A key that only reaches the retired `lyria-3-pro-preview`
+  model still works through the CLI's legacy route but cannot use `-Clip` or images.
 
 ## Two input modes: markdown vs manifest
 
@@ -46,6 +51,30 @@ The CLI accepts tracks two ways — choose by the file's shape:
 
 A dry-run decides which (step 4): preview `-Path` first; if it reads the file
 correctly, stay in markdown mode; otherwise extract a manifest.
+
+## Two models: full songs and 30-second clips
+
+The CLI targets two Lyria 3.5 models, both through the Gemini Interactions API:
+
+| Model | Selected by | Output | Written to |
+|---|---|---|---|
+| `lyria-3.5` (default) | nothing to add | a full song, a couple of minutes long, with verses / choruses / bridges; duration steerable from the prompt | `<catalogue-folder>/NN-slug.mp3` |
+| `lyria-3-clip-preview` | `-Clip` | always a 30-second clip | `<catalogue-folder>/clips/NN-slug.mp3` |
+
+Clips are the cheap way to hear whether a prompt lands before paying for the full
+song. Because clips live in their own `clips/` subfolder, they never collide with
+full songs and skip-existing works independently in each mode: re-running `-Clip`
+skips clips that exist, re-running without it skips full songs that exist.
+
+Two Lyria 3.5-only inputs are available through manifest mode: **reference images**
+(up to 10 per track, `images: [...]` in the manifest, see
+`references/manifest-schema.md`) and the config's **`defaultDurationHint`** (a
+sentence such as `Target length: about 3 minutes.` appended to any prompt that says
+nothing about its length; never appended in Clip mode). Both are optional.
+
+Older `lyria-3-pro-*` model ids still work: the CLI routes them to the legacy
+`generateContent` endpoint automatically. They cannot use `-Clip`, images, or the
+new WAV request.
 
 ## Workflow
 
@@ -112,6 +141,21 @@ scratchpad path is fine), and dry-run that instead:
 Confirm the manifest dry-run shows the right tracks before generating. This is where
 Claude's reading does the work the rigid parser cannot.
 
+### 4b. (Optional) Audition with Clip before spending on full songs
+
+When the prompts are new, experimental, or the user is unsure about a style, offer a
+Clip pass first. Same command, add `-Clip`:
+
+```powershell
+& <cli-path> -Path <markdown-path> -Clip -DryRun      # plan shows .../clips as the output folder
+& <cli-path> -Path <markdown-path> -Clip -Index N     # one 30-second preview
+& <cli-path> -Path <markdown-path> -Clip              # preview every track
+```
+
+Report the `clips/` files, let the user listen and adjust the catalogue, then run the
+full generation without `-Clip`. Clips are always MP3; `-Format wav` is ignored with a
+warning in Clip mode.
+
 ### 5. Confirm scope before generating
 
 Generation is metered. Agree with the user on how much to produce:
@@ -121,7 +165,8 @@ Generation is metered. Agree with the user on how much to produce:
 - A whole file: no selection flags
 - A whole folder: point `-Path` at the folder
 
-State the rough cost/time (tracks × ~30-120s) so the user opts in deliberately.
+State the rough cost/time (full songs: tracks × several minutes; clips: tracks × well
+under a minute) so the user opts in deliberately.
 
 ### 6. Generate and report
 
@@ -158,9 +203,9 @@ the user, and normalise to the labelled convention (see the
 
 Per [Google's Lyria docs](https://ai.google.dev/gemini-api/docs/generate-content/music-generation),
 the model **generates vocals and its own lyrics by default when the prompt doesn't
-specify otherwise**. On the `:generateContent` surface this CLI uses there is no
-instrumental flag, no `negative_prompt` and no lyrics field — vocal behaviour is
-controlled entirely by the prompt text. The documented phrasing for an instrumental is:
+specify otherwise**. On both API surfaces this CLI uses (the Interactions API and the
+legacy `:generateContent` route) there is no instrumental flag, no `negative_prompt`
+and no lyrics field — vocal behaviour is controlled entirely by the prompt text. The documented phrasing for an instrumental is:
 
 > `Instrumental only, no vocals.`
 
@@ -186,12 +231,33 @@ posted — it confirms track count, boundaries and filenames, not prompt content
 | `-Index N` | Generate only track N (1-based catalogue position). |
 | `-Limit N` | Generate at most N tracks (applied after `-Index`). |
 | `-Force` | Overwrite audio that already exists. |
-| `-Model` | Override model id (default `lyria-3-pro-preview`). |
-| `-Format` | `mp3` (default) or `wav` (Pro model only). |
+| `-Clip` | Preview mode: 30-second `lyria-3-clip-preview` clips written to a `clips/` subfolder. Never appends the duration hint; forces mp3. |
+| `-Model` | Override model id (default `lyria-3.5`; `-Clip` defaults to `lyria-3-clip-preview`). Ids starting `lyria-3-pro-` route to the legacy endpoint automatically. |
+| `-Format` | `mp3` (default) or `wav` (Lyria 3.5 only; ignored with `-Clip`). The API currently declines WAV for `lyria-3.5`, in which case the CLI warns and delivers mp3. The saved extension always matches the bytes the API returned. |
 | `-ApiKey` | Provide the key inline. |
 | `-ConfigPath` | Use a specific `lyra-config.json` (e.g. the project's). |
 | `-Instrumental` | Append "Instrumental only, no vocals." when not already present. Backup, not a cure — it does not remove vocal requests already in the prompt, and it is appended even when lyrics exist. |
 | `-Recurse` | Recurse into subfolders when `-Path` is a folder. |
+
+## Configuration keys (`lyra-config.json`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `apiKey` | `""` | Falls back to `-ApiKey`, then `$env:GEMINI_API_KEY`, then `$env:LYRIA_API_KEY`. |
+| `model` | `lyria-3.5` | Full-song model. |
+| `clipModel` | `lyria-3-clip-preview` | Model used by `-Clip`. |
+| `apiMode` | `auto` | `auto` routes by model id; `interactions` or `generateContent` forces a route. |
+| `endpointBase` | `https://generativelanguage.googleapis.com/v1beta` | API root. A v1 value ending in `/models` is accepted. |
+| `outputFormat` | `mp3` | `mp3` or `wav`. |
+| `timeoutSeconds` | `600` | Per-request timeout and the polling deadline. |
+| `pollIntervalSeconds` | `5` | Poll cadence if the API answers asynchronously. |
+| `instrumentalByDefault` | `false` | Same as passing `-Instrumental` every run. |
+| `defaultDurationHint` | `""` | Appended to prompts that say nothing about length (never in Clip mode). |
+| `clipSubfolder` | `clips` | Subfolder for `-Clip` output. |
+| `delayBetweenTracksSeconds` | `2` | Pause between tracks. |
+| `maxRetries` | `2` | Retries per track on transient failure. |
+| `saveLyricsSidecar` | `true` | Write `NN-slug.txt` (lyrics) and `NN-slug.structure.json` (model's structure block) when returned. |
+| `slugMaxLength` | `80` | Filename slug cap. |
 
 ## Troubleshooting
 
@@ -200,11 +266,22 @@ posted — it confirms track count, boundaries and filenames, not prompt content
   documented default. Add `Instrumental only, no vocals.` (or pass `-Instrumental`) and
   regenerate with `-Force`. `-DryRun` cannot reveal this, as it does not show the
   posted prompt text.
-- **No audio / "No candidates" / finishReason error:** the prompt may have been
-  safety-filtered, or the model returned a long-running operation instead of inline
-  audio. The exact API message is surfaced — read it. Inline-audio is the proven
-  path; if a model starts returning an operation handle, both implementations would
-  need a polling branch added (see `references/catalogue-format.md`).
+- **`No audio block in interaction response` / `Interaction failed:`** the prompt was
+  most likely safety-filtered (named artists, copyrighted lyrics) or the model
+  returned only text. The CLI prints the API's own message and the first 200
+  characters of any returned text — read it, fix the prompt, regenerate with `-Force`.
+- **`Timed out after Ns waiting for interaction <id>`:** the API answered
+  asynchronously and did not finish inside `timeoutSeconds`. This failure is *not*
+  retried (a re-post would double-spend). Raise `timeoutSeconds` in the config and
+  run again; the message includes the `GET .../interactions/<id>` URL to recover the
+  result manually.
+- **`-Format wav` printed `WAV is not supported for lyria-3.5 ... Falling back to mp3`:**
+  as of 2026-09-05 the live API declines WAV for `lyria-3.5` (`Audio MIME type
+  AUDIO_WAV is not supported`). The CLI sends the correct request
+  (`response_format: { type: "audio", mime_type: "audio/wav" }`), and when the API
+  rejects it, re-sends the track as MP3 and says so — nothing fails, nothing is
+  mislabelled. When Google enables WAV for the model, the same request will start
+  returning `.wav` files with no code change.
 - **Auth errors:** confirm the key is present and has Lyria access; re-check which
   config the CLI is reading (project vs bundled).
 - **TLS / connection errors when running the `.ps1` fallback on PowerShell 5.1:**

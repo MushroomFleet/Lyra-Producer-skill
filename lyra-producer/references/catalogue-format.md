@@ -82,6 +82,20 @@ composers/
 When `-Path` is a folder, every `.md` in it is processed and each gets its own
 per-file subfolder beside it.
 
+With `-Clip`, audio goes one level deeper, into `<folder>/clips/` (the `clipSubfolder`
+config key), so 30-second previews and full songs never share a filename:
+
+```
+composers/
+  wagner-preludes-that-never/
+    01-vorspiel-zu-die-nebelkonigin-wwv-2204.mp3      <- full song (lyria-3.5)
+    clips/
+      01-vorspiel-zu-die-nebelkonigin-wwv-2204.mp3    <- 30-second preview (-Clip)
+```
+
+Skip-existing looks only at `NN-slug.mp3` / `NN-slug.wav` in the folder being written;
+sidecar files never cause a SKIP.
+
 ## Lyrics & timed structure (optional, per-track)
 
 Lyrics and a timed structure are **optional and independent** — most catalogues (all
@@ -116,21 +130,32 @@ re-run the dry-run rather than guessing.
 
 ## Output sidecar
 
-This is *output*, separate from the input lyrics above. Lyria returns a text part
-alongside the audio. For instrumental prompts it's only the model's own section
-markers like `[[A0]] [[A1]] [[B3]]` — noise. The CLI auto-skips writing a sidecar
-when the returned text is markers-only, so instrumental tracks produce no `.txt`.
-When a vocal track comes back with real sung lyrics and `saveLyricsSidecar` is true,
-those are written to a `.txt` beside the mp3. Set `saveLyricsSidecar` false to never
-write one.
+This is *output*, separate from the input lyrics above. Lyria returns text alongside
+the audio. For instrumental prompts it's only the model's own section markers like
+`[[A0]] [[A1]] [[B3]]` — noise. The CLI auto-skips writing a sidecar when the returned
+text is markers-only, so instrumental tracks produce no `.txt`. When a vocal track
+comes back with real sung lyrics and `saveLyricsSidecar` is true, those are written to
+`NN-slug.txt` beside the audio. Lyria 3.5 may additionally return a JSON description
+of the song structure; that block is written to `NN-slug.structure.json` under the same
+setting. Set `saveLyricsSidecar` false to never write either.
 
 ## Model / API shape
 
-Defaults target `lyria-3-pro-preview` via
-`POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`
-with header `x-goog-api-key`, body `{ contents: [{ parts: [{ text: prompt }] }] }`.
-The response carries base64 audio in `candidates[0].content.parts[].inlineData`
-plus optional text parts. This is synchronous — a full song returns in ~30-120s.
-If a future model instead returns a long-running operation handle, the CLI will
-surface that as an error rather than audio, and the script's `Read-LyriaResponse`
-would need a polling branch added.
+Defaults target `lyria-3.5` through the Gemini **Interactions API**:
+`POST https://generativelanguage.googleapis.com/v1beta/interactions` with header
+`x-goog-api-key`, body `{ "model": "lyria-3.5", "input": "<prompt>" }` (or an `input`
+array of `{type:"text"}` / `{type:"image"}` blocks when a manifest track carries
+images; `"response_format": {"type":"audio","mime_type":"audio/wav"}` is added for WAV,
+which the API currently declines for `lyria-3.5` — the CLI then warns and re-sends the
+track as MP3). The response is a
+list of `steps`; the `model_output` step's `content` holds `{type:"audio", data:<base64>}`
+and `{type:"text", text:...}` blocks (lyrics, and sometimes a JSON structure). The CLI
+takes the last audio block, decides the file extension from the bytes, and writes the
+text blocks as sidecars. If the API answers with a non-terminal `status`, the CLI polls
+`GET .../interactions/{id}` every `pollIntervalSeconds` until `timeoutSeconds` elapse.
+
+`-Clip` swaps the model for `lyria-3-clip-preview` (always 30 seconds) on the same
+endpoint. Model ids beginning `lyria-3-pro-` are routed to the legacy
+`POST .../v1beta/models/{model}:generateContent` endpoint with the v1 body and the
+`candidates[0].content.parts[].inlineData` response, so old configs keep working; that
+route cannot take images.

@@ -10,7 +10,7 @@ files into full-song `.mp3` audio on disk. No frontend, no database — just
 | File | Purpose |
 |---|---|
 | `Invoke-LyraProducer.ps1` | The CLI. |
-| `lyra-config.json` | Your config **with the API key** (git-ignored). |
+| `lyra-config.json` | Your config **with the API key** (git-ignored; copy from the example). |
 | `lyra-config.example.json` | Template to copy from. |
 
 ## Setup
@@ -20,7 +20,8 @@ files into full-song `.mp3` audio on disk. No frontend, no database — just
    { "apiKey": "AIza..." }
    ```
    (Or leave it blank and set `$env:GEMINI_API_KEY`, or pass `-ApiKey`.)
-2. That's it. Defaults target `lyria-3-pro-preview` (full songs), `mp3` output.
+2. That's it. Defaults target `lyria-3.5` (full songs) via the Gemini Interactions API,
+   `mp3` output. Add `-Clip` for 30-second `lyria-3-clip-preview` previews.
 
 ## How it reads a markdown file
 
@@ -52,7 +53,8 @@ composers/
 Filenames are `NN-<slugified-heading>.mp3` where `NN` is the track's 1-based
 position in the catalogue (stable regardless of `-Index`/`-Limit`). Slugs are
 lowercase, hyphen-separated, ASCII-folded (`ö → o`, `ß → ss`). Existing files
-are skipped unless you pass `-Force`.
+are skipped unless you pass `-Force`. With `-Clip`, previews land in a `clips/`
+subfolder beside the full songs.
 
 ## Usage
 
@@ -89,17 +91,21 @@ Generate every `.md` in a folder:
 | `-Index N` | Generate only track N (1-based). |
 | `-Limit N` | Generate at most N tracks (after `-Index`). |
 | `-Force` | Overwrite existing audio files. |
-| `-Model` | Override model id (default `lyria-3-pro-preview`). |
-| `-Format` | `mp3` (default) or `wav` (Pro only). |
+| `-Clip` | 30-second preview mode (`lyria-3-clip-preview`), output to `clips/`. |
+| `-Model` | Override model id (default `lyria-3.5`; `lyria-3-pro-*` ids use the legacy endpoint). |
+| `-Format` | `mp3` (default) or `wav` (Lyria 3.5 only; ignored with `-Clip`; the API currently declines WAV, in which case the CLI warns and delivers mp3). |
 | `-ApiKey` | Override the key. |
 | `-Instrumental` | Append "Instrumental only, no vocals." if not already present. |
 | `-Recurse` | Recurse into subfolders when `-Path` is a folder. |
 
 ## Notes
 
-- Generation is **synchronous** per track (matches the proven Stage 12 plan);
-  Pro full songs typically take ~30–120s. Requests use a 5-minute timeout and
-  retry twice on transient failures.
+- Generation is **synchronous per track** and strictly sequential. Lyria 3.5 full songs
+  are a couple of minutes long and can take several minutes to render; requests wait up
+  to `timeoutSeconds` (default 600) and poll if the API answers asynchronously. Clips
+  return much faster. Transient failures retry twice with backoff.
 - Runs sequentially with a small delay between tracks to stay friendly to rate
   limits. Cost scales with the number of tracks — use `-Index`/`-Limit` while
   testing.
+- The native `LyraProducer.exe` is built from a private source tree and is not committed
+  here; the script and the exe accept identical flags and print identical output.

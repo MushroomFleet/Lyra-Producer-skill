@@ -1,7 +1,7 @@
   # 🎵 Lyra-Producer
 
   **A zero-UI PowerShell pipeline + Claude Code skill for turning Markdown prompt catalogues into 
-  full-song audio with Google's Gemini Lyria music model.**
+  full-song audio with Google's Gemini Lyria 3.5 music models.**
 
   Lyra-Producer takes plain Markdown files full of music-generation prompts and produces finished `.mp3`
   audio on disk — no frontend, no database, no clicking through a UI. You write (or AI-generate) a
@@ -29,8 +29,9 @@
   - **Markdown → MP3.** Point it at a `.md` file (or a folder of them) and it generates one full song per
   track.
   - **Zero UI.** Pure PowerShell orchestration plus a small config file. No app, no server, no browser.
-  - **Full songs.** Targets the Lyria Pro model for complete arrangements, with synchronous inference
-  straight to inline audio.
+  - **Full songs, or 30-second clips.** Targets `lyria-3.5` through the Gemini Interactions API for
+  complete arrangements a couple of minutes long, and `lyria-3-clip-preview` (via `-Clip`) for fast
+  previews written to a `clips/` subfolder so you can audition prompts before spending on full songs.
   - **Optional lyrics & timed structure.** If a track carries custom lyrics or a timestamped structure,
   they're detected and folded into the prompt; purely instrumental tracks just send the prompt.
   - **Safe, resumable batches.** Strictly sequential generation (never parallel), automatic retries on
@@ -48,7 +49,7 @@
   - parses each track (a heading + a fenced prompt block, plus any optional lyrics / structure),
   - slugifies each track title into a safe, numbered filename,
   - writes audio into a per-catalogue output subfolder beside the source Markdown,
-  - calls Gemini Lyria and streams the returned audio to `.mp3`,
+  - calls Lyria 3.5 (or the Clip model) and writes the returned audio to `.mp3` or `.wav`,
   - runs the whole set as a sequential queue with retries and skip-existing.
 
   Settings — API key, model, output format, request timeout, retry count, inter-track delay — come from a
@@ -81,7 +82,7 @@
   ## Requirements
 
   - **Windows PowerShell 5.1+**
-  - A **Google Gemini / Lyria API key** with access to the Lyria model
+  - A **Google Gemini API key** with access to the Lyria 3.5 models
   - *(Optional)* **Claude Code** — only needed for the natural-language skill layer; the CLI works
   standalone
 
@@ -136,12 +137,16 @@
 
   ## Configuration
 
-  A small JSON config controls: the API key, the model, output format (`mp3`/`wav`), request timeout,
-  delay between tracks, retry count, whether to save the text sidecar, and the maximum filename-slug
-  length. Sensible defaults ship in the example config.
+  A small JSON config controls: the API key, the full-song and clip models, API routing, output format
+  (`mp3`/`wav`), request timeout and poll interval, an optional default duration hint, the clips
+  subfolder name, delay between tracks, retry count, whether to save the text/structure sidecars, and
+  the maximum filename-slug length. Sensible defaults ship in the example config; v1 configs keep
+  working.
 
   ## Notes & tips
 
+  - **Preview with Clip first.** `-Clip` renders 30-second previews into `clips/` for a fraction of the
+  cost of full songs. Iterate on prompts there, then run the full set.
   - **Sequential by design.** Tracks generate one at a time to stay friendly to rate limits and cost. Use
   `-Index` / `-Limit` while testing.
   - **Resumable.** Re-running skips anything already on disk, so an interrupted batch just picks up where
@@ -151,6 +156,20 @@
   [artist]"). Describe the era or genre instead (e.g. "late-Romantic", "impressionist") to stay clear of
   the filter.
   - **Big files, small repos.** Generated audio is large — keep it out of Git and back it up separately.
+
+  ## Changelog
+
+  ### 2.0.0
+  - Lyria 3.5 (`lyria-3.5`) is the default model, served by the Gemini Interactions API.
+  - `-Clip` renders 30-second `lyria-3-clip-preview` previews into a `clips/` subfolder.
+  - Manifest tracks may carry up to 10 reference `images`.
+  - `defaultDurationHint` config appends a length instruction to prompts that lack one.
+  - `lyria-3-pro-*` model ids still work through the legacy endpoint (automatic routing).
+  - Extension is chosen from the returned bytes; JSON structure blocks are saved as
+  `NN-slug.structure.json`; sidecars no longer block regeneration.
+  - `-Format wav` sends the correct `response_format` request; while the API declines WAV for
+  `lyria-3.5`, the CLI warns and delivers mp3 instead of failing.
+  - Default timeout raised to 600 s with polling for asynchronous responses.
 
   ## License
 
@@ -171,5 +190,5 @@
     author = {Drift Johnson},
     year = {2026},
     url = {https://github.com/MushroomFleet/Lyra-Producer-skill},
-    version = {1.0.0}
+    version = {2.0.0}
   }
