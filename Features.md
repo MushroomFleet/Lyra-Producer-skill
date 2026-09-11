@@ -2,8 +2,8 @@
 artifact: Features.md
 standard_version: 1.0
 project: Lyra-Producer
-project_version: 2.0.0
-last_curated: 2026-09-05
+project_version: 2.0.1
+last_curated: 2026-09-11
 curation_trigger: scan
 source_of_truth: true
 contains_code: false
@@ -40,8 +40,8 @@ generation is strictly sequential, resumable, and honest about what it produced.
 - **Platform:** Windows. The executable runs on its own; the script needs the Windows shell scripting
   environment present on all current Windows releases.
 - **Distribution:** the script, the skill, and the documentation are published in a public source
-  repository; the executable is published as a release artifact with a checksum and is built from a
-  private source tree.
+  repository; the executable is published as a release artifact with a checksum, and its source is
+  kept in a private developer repository.
 
 ## 3. Feature Manifest
 
@@ -196,9 +196,10 @@ generation is strictly sequential, resumable, and honest about what it produced.
 Invocation is `<engine> -Path <file-or-folder>` or `<engine> -Manifest <json>` with optional flags:
 `-DryRun`, `-Clip`, `-Index <n>`, `-Limit <n>`, `-Force`, `-Model <id>`, `-Format mp3|wav`,
 `-Instrumental`, `-Recurse`, `-ApiKey <key>`, `-ConfigPath <file>`. Flags are single-dash and
-case-insensitive; exactly one of `-Path` or `-Manifest` is required. Exit code is zero when the run
-completes (individual track failures are reported in the output, not the exit code) and non-zero when
-the run itself cannot proceed.
+case-insensitive; exactly one of `-Path` or `-Manifest` is required. Exit codes: `0` when the run
+completes and no track failed (skipped tracks and dry runs count as success), `2` when the run
+completes but one or more tracks failed after their retries (the failures are also reported in the
+output), and `1` when the run itself cannot proceed.
 
 ### 5.2 Console output contract
 
@@ -276,8 +277,9 @@ system uses.
   wraps the engine as a function that always dry-runs first and requires an explicit opt-in to generate.
 - **Two implementations must stay in step.** Any behavioural change lands in both the script and the
   executable, with identical console output, so the skill's instructions apply to either.
-- **Private executable source.** The executable's source is maintained outside this repository; the
-  script in this repository is the readable reference for its behaviour.
+- **Executable source.** The executable's source lives in the private developer repository beside the
+  script; the public repository carries only the script, which is the readable reference for the
+  executable's behaviour.
 
 ## 7. Glossary
 

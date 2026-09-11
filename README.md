@@ -54,7 +54,8 @@ queue that runs unattended and delivers audio to disk. It was built to produce l
 Download it from the [latest release](https://github.com/MushroomFleet/Lyra-Producer-skill/releases/latest)
 and drop it next to a `lyra-config.json`. It is a self-contained win-x64 single file; nothing else needs
 to be installed. Every release lists the file's SHA256 and the toolchain it was built with. The exe is
-built from a private source tree and is not part of this repository.
+built from the C# source in `CLI/LyraProducer.Cli/`, which lives in the private developer repository
+and is not published in the public one.
 
 ### 2. The PowerShell CLI — `Invoke-LyraProducer.ps1`
 
@@ -225,9 +226,19 @@ returns lyrics, they are saved as `NN-slug.txt`; when it returns a JSON song str
 |---|---|
 | `lyra-producer/` | The Claude Code skill: `SKILL.md`, `references/`, and `scripts/` (the script and the example config). Copy this folder into `~/.claude/skills/`. |
 | `CLI/lyra-producer/` | The standalone CLI folder: the same script, its README, and the example config, for use without the skill. |
+| `CLI/LyraProducer.Cli/` | C# source of the native exe (private developer repository only; absent from the public repo). |
 | `Features.md` | Code-free manifest of every feature and the stack, for readers without source access. |
 
 ## Changelog
+
+### 2.0.1
+- Exit codes: the CLI (exe and script) now exits `2` when the run completes but one or more
+  tracks failed after their retries. `0` still means no track failed (skips and dry runs count as
+  success) and `1` that the run could not proceed, so an orchestrator can spot a partial run from
+  the exit code alone. Previously every completed run exited `0`.
+- The script surfaces the API's error text after a rethrow on Windows PowerShell 5.1.
+- `SKILL.md` documents the exit codes, and advises retrying a policy refusal (including the
+  "sensitive words" wording) before rewording a prompt.
 
 ### 2.0.0
 - Lyria 3.5 (`lyria-3.5`) is the default model, served by the Gemini Interactions API.
@@ -261,6 +272,6 @@ If you use this codebase in your research or project, please cite:
   author = {Drift Johnson},
   year = {2026},
   url = {https://github.com/MushroomFleet/Lyra-Producer-skill},
-  version = {2.0.0}
+  version = {2.0.1}
 }
 ```

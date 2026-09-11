@@ -183,6 +183,13 @@ summary. `-Index` / `-Limit` select a subset in either mode. Report the output f
 and the files produced, and surface any failures verbatim rather than smoothing over
 them.
 
+The exit code says how the run ended: `0` = completed with no failed track (skips
+count as success), `2` = completed but at least one track `FAILED` after its retries,
+`1` = the run could not proceed (no key, bad path, unknown flag). On `2`, re-run the
+same command: skip-existing means only the missing tracks are requested again. A
+policy refusal, including the "sensitive words" wording, has cleared on an unchanged
+retry, so retry before rewording a prompt.
+
 ## Lyrics & timed structure are optional, per-track
 
 The `###` header is the track boundary, so a track carries lyrics or a timed

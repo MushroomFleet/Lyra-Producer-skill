@@ -519,30 +519,44 @@ function Resolve-ApiError {
     param($ErrorRecord)
     # Gemini returns a JSON error body. PowerShell often surfaces it in
     # ErrorDetails.Message; on 5.1 it may only be readable from the WebException's
-    # response stream. Fall back to the raw exception message.
+    # response stream, and that stream can be read ONCE (disposing a reader
+    # closes it). So: never dispose the reader, and cache the resolved text on
+    # the error record so a second caller (the queue, after a rethrow) gets the
+    # same answer instead of a generic "(400) Bad Request".
+    if ($ErrorRecord.PSObject.Properties.Name -contains 'LyraResolvedDetail') {
+        return $ErrorRecord.LyraResolvedDetail
+    }
+
     $detail = $null
-    $body = $null
+    $candidates = @()
     try {
         if ($ErrorRecord.ErrorDetails -and $ErrorRecord.ErrorDetails.Message) {
-            $body = $ErrorRecord.ErrorDetails.Message
-        } elseif (($ErrorRecord.Exception.PSObject.Properties.Name -contains 'Response') -and $ErrorRecord.Exception.Response) {
+            $candidates += $ErrorRecord.ErrorDetails.Message
+        }
+        if (($ErrorRecord.Exception.PSObject.Properties.Name -contains 'Response') -and $ErrorRecord.Exception.Response) {
             $stream = $ErrorRecord.Exception.Response.GetResponseStream()
-            if ($stream) {
+            if ($stream -and $stream.CanRead) {
                 if ($stream.CanSeek) { $stream.Position = 0 }
                 $reader = New-Object System.IO.StreamReader($stream)
-                $body = $reader.ReadToEnd()
-                $reader.Dispose()
+                $candidates += $reader.ReadToEnd()       # reader intentionally left undisposed
             }
         }
-        if ($body) {
+    } catch { }
+
+    foreach ($body in $candidates) {
+        if (-not $body) { continue }
+        try {
             $parsed = $body | ConvertFrom-Json
             # The Interactions endpoint wraps error bodies in a one-element array:
             # [{ "error": { ... } }]. Unwrap it; generateContent returns a bare object.
             if ($parsed -is [System.Array]) { $parsed = @($parsed)[0] }
             $detail = Get-Prop (Get-Prop $parsed @('error')) @('message', 'status')
-        }
-    } catch { }
+            if ($detail) { break }
+        } catch { }
+    }
+
     if (-not $detail) { $detail = $ErrorRecord.Exception.Message }
+    try { $ErrorRecord | Add-Member -NotePropertyName LyraResolvedDetail -NotePropertyValue $detail -Force } catch { }
     return $detail
 }
 
@@ -663,8 +677,11 @@ function Invoke-LyriaInteraction {
             -ContentType 'application/json; charset=utf-8' `
             -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) -TimeoutSec $TimeoutSec
     } catch {
+        # Only a WAV request needs the error text here; everything else goes
+        # straight to the queue, which resolves the message (once) for its report.
+        if ($Format -ne 'wav') { throw }
         $msg = Resolve-ApiError $_
-        if ($Format -eq 'wav' -and ($msg -match '(?i)mime type .* not supported')) {
+        if ($msg -match '(?i)mime type .* not supported') {
             # The API declined WAV for this model. Say so and deliver MP3 instead
             # of failing the track; the file is named by its real bytes.
             Write-Warning "WAV is not supported for $Model ($msg). Falling back to mp3."
@@ -1128,3 +1145,8 @@ if ($DryRun) {
     Write-Host ("Done. Generated: {0}  Skipped: {1}  Failed: {2}" -f `
         $totals.Generated, $totals.Skipped, $totals.Failed) -ForegroundColor Magenta
 }
+
+# Exit-code contract (shared with LyraProducer.exe): 0 = the run completed and no track
+# failed, 2 = the run completed but one or more tracks failed, 1 = the run could not proceed
+# (a terminating error, which powershell.exe -File reports as 1).
+if (-not $DryRun -and $totals.Failed -gt 0) { exit 2 }
